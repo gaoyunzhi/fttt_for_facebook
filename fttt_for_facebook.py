@@ -6,8 +6,8 @@ from bs4 import BeautifulSoup
 import asyncio
 import yaml
 import plain_db
-import markdown
 from telegram_util import isCN
+import webgram
 
 with open('credential') as f:
     credential = yaml.load(f, Loader=yaml.FullLoader)
@@ -19,22 +19,27 @@ cache = plain_db.load('cache')
 
 def getNextPost(posts):
     for post in posts[::-1]:
-        if isCN(post.text):
+        if post.text and isCN(post.text):
             return post
 
 def getText(post):
-    html = markdown.markdown(post.text)
-    soup = BeautifulSoup(html, 'html.parser')
-    for item in soup.find('p'):
+    soup = webgram.getPost(setting['src_name'], post.id).text
+    source = ''
+    for item in soup:
         if item.name == 'a':
+            if 'source' in item.text:
+                source = item['href']
             item.decompose()
+        if item.name == 'br':
+            item.replace_with('\n')
     text = soup.text.strip()
-    return text
+    result = text + '\n\n' + source
+    return result
 
 async def process(client):
     src = await client.get_entity(setting['src'])
     last_sync = cache.get('last_sync', 0)
-    posts = await client.get_messages(src, min_id=last_sync, max_id = last_sync + 100, limit = 10)
+    posts = await client.get_messages(src, min_id=last_sync, max_id = last_sync + 100, limit = 100)
     post = getNextPost(posts)
     if not post:
         cache.update('last_sync', last_sync + 99)
@@ -42,7 +47,7 @@ async def process(client):
     text = getText(post)
     dest = await client.get_entity(setting['dest'])
     # '/fttt ' + text
-    await client.send_message(dest, text) # link_preview = False?
+    # await client.send_message(dest, text) # link_preview = False?
     cache.update('last_sync', post.id)
         
 async def run():
@@ -54,5 +59,7 @@ async def run():
 if __name__ == "__main__":
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    r = loop.run_until_complete(run())
+    cache.update('last_sync', 0) # testing
+    for _ in range(100):
+        loop.run_until_complete(run())
     loop.close()
