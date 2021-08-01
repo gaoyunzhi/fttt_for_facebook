@@ -42,7 +42,7 @@ async def process(client):
     text = getText(post)
     dest = await client.get_entity(setting['dest'])
     # '/fttt ' + text
-    await dest.send_message(text) # link_preview = False?
+    await client.send_message(dest, text) # link_preview = False?
     cache.update('last_sync', post.id)
         
 async def run():
